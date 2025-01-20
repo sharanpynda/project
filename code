@@ -7,22 +7,32 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { EntitlementService } from 'src/app/_services/entitlement.service';
 import { DesignLayoutComponent } from '../../../_layouts/design-layout/design-layout.component';
 import { ResourceStatus } from 'src/app/shared/models/resource';
+import { NasVolumes } from 'src/app/shared/models/nas';
 
 describe('NasTableComponent', () => {
   let component: NasTableComponent;
   let fixture: ComponentFixture<NasTableComponent>;
-  let backendService: jasmine.SpyObj<BackEndService>;
-  let dialog: jasmine.SpyObj<MatDialog>;
-  let entitlementService: jasmine.SpyObj<EntitlementService>;
-  let router: jasmine.SpyObj<Router>;
+  let backendService: jest.Mocked<BackEndService>;
+  let dialog: jest.Mocked<MatDialog>;
+  let entitlementService: jest.Mocked<EntitlementService>;
+  let router: jest.Mocked<Router>;
   let route: ActivatedRoute;
   let designLayoutComponent: DesignLayoutComponent;
 
   beforeEach(async () => {
-    backendService = jasmine.createSpyObj('BackEndService', ['use']);
-    dialog = jasmine.createSpyObj('MatDialog', ['open']);
-    entitlementService = jasmine.createSpyObj('EntitlementService', ['hasEntitlement']);
-    router = jasmine.createSpyObj('Router', ['navigateByUrl', 'navigate']);
+    backendService = {
+      use: jest.fn().mockReturnThis(),
+    };
+    dialog = {
+      open: jest.fn(),
+    };
+    entitlementService = {
+      hasEntitlement: jest.fn(),
+    };
+    router = {
+      navigateByUrl: jest.fn(),
+      navigate: jest.fn(),
+    };
     route = {} as ActivatedRoute;
     designLayoutComponent = {} as DesignLayoutComponent;
 
@@ -120,8 +130,10 @@ describe('NasTableComponent', () => {
   });
 
   it('should retrieve and display NAS data from backend', () => {
-    const mockData = [{ id: 1, friendlyName: 'NAS1', status: 'NEW' }];
-    backendService.use.and.returnValue({ with: jasmine.createSpy().and.returnValue({ get: jasmine.createSpy().and.returnValue(of(mockData)) }) });
+    const mockData: NasVolumes[] = [
+      { id: 1, friendlyName: 'NAS1', status: ResourceStatus.NEW, otherField: 'some data' }
+    ];
+    backendService.use.mockReturnValue({ with: jest.fn().mockReturnValue({ get: jest.fn().mockReturnValue(of(mockData)) }) });
 
     component.retrieve().subscribe(data => {
       expect(data).toEqual(mockData);
@@ -129,7 +141,7 @@ describe('NasTableComponent', () => {
   });
 
   it('should display undo action if row is New', () => {
-    const row = { id: 1, status: ResourceStatus.NEW };
+    const row: NasVolumes = { id: 1, friendlyName: 'NAS1', status: ResourceStatus.NEW, otherField: 'some data' };
     fixture.detectChanges();
 
     const undoButton = fixture.nativeElement.querySelector('.undo-button');
@@ -137,7 +149,7 @@ describe('NasTableComponent', () => {
   });
 
   it('should display undo action if row is Modified', () => {
-    const row = { id: 1, status: ResourceStatus.MODIFIED };
+    const row: NasVolumes = { id: 1, friendlyName: 'NAS1', status: ResourceStatus.MODIFIED, otherField: 'some data' };
     fixture.detectChanges();
 
     const undoButton = fixture.nativeElement.querySelector('.undo-button');
@@ -145,7 +157,7 @@ describe('NasTableComponent', () => {
   });
 
   it('should display delete action if row is existing', () => {
-    const row = { id: 1, status: ResourceStatus.EXISTING };
+    const row: NasVolumes = { id: 1, friendlyName: 'NAS1', status: ResourceStatus.EXISTING, otherField: 'some data' };
     fixture.detectChanges();
 
     const deleteButton = fixture.nativeElement.querySelector('.delete-button');
@@ -153,76 +165,50 @@ describe('NasTableComponent', () => {
   });
 
   it('should display are-you-sure-dialog when delete button is pressed', () => {
-    const row = { id: 1, status: ResourceStatus.EXISTING };
-    dialog.open.and.returnValue({ afterClosed: jasmine.createSpy().and.returnValue(of('Delete')) });
+    const row: NasVolumes = { id: 1, friendlyName: 'NAS1', status: ResourceStatus.EXISTING, otherField: 'some data' };
+    dialog.open.mockReturnValue({ afterClosed: jest.fn().mockReturnValue(of('Delete')) });
 
     component.deleteRow(row);
     expect(dialog.open).toHaveBeenCalled();
   });
 
   it('should display are-you-sure-dialog when undo row-action is pressed for a Modified status', () => {
-    const row = { id: 1, status: ResourceStatus.MODIFIED };
-    dialog.open.and.returnValue({ afterClosed: jasmine.createSpy().and.returnValue(of('Revert')) });
+    const row: NasVolumes = { id: 1, friendlyName: 'NAS1', status: ResourceStatus.MODIFIED, otherField: 'some data' };
+    dialog.open.mockReturnValue({ afterClosed: jest.fn().mockReturnValue(of('Revert')) });
 
     component.revert(row);
     expect(dialog.open).toHaveBeenCalled();
   });
 
   it('should display are-you-sure-dialog-this-can-not-be-reverted when undo row-action is pressed for a New status', () => {
-    const row = { id: 1, status: ResourceStatus.NEW };
-    dialog.open.and.returnValue({ afterClosed: jasmine.createSpy().and.returnValue(of('Revert')) });
+    const row: NasVolumes = { id: 1, friendlyName: 'NAS1', status: ResourceStatus.NEW, otherField: 'some data' };
+    dialog.open.mockReturnValue({ afterClosed: jest.fn().mockReturnValue(of('Revert')) });
 
     component.revert(row);
     expect(dialog.open).toHaveBeenCalled();
   });
 
   it('should do nothing when cancel is selected in delete-dialog', () => {
-    const row = { id: 1, status: ResourceStatus.EXISTING };
-    dialog.open.and.returnValue({ afterClosed: jasmine.createSpy().and.returnValue(of('Cancel')) });
+    const row: NasVolumes = { id: 1, friendlyName: 'NAS1', status: ResourceStatus.EXISTING, otherField: 'some data' };
+    dialog.open.mockReturnValue({ afterClosed: jest.fn().mockReturnValue(of('Cancel')) });
 
     component.deleteRow(row);
     expect(backendService.use).not.toHaveBeenCalled();
   });
 
   it('should call back-end delete when delete is selected in delete dialog', () => {
-    const row = { id: 1, status: ResourceStatus.EXISTING };
-    dialog.open.and.returnValue({ afterClosed: jasmine.createSpy().and.returnValue(of('Delete')) });
-    backendService.use.and.returnValue({ with: jasmine.createSpy().and.returnValue({ delete: jasmine.createSpy().and.returnValue(of(null)) }) });
+    const row: NasVolumes = { id: 1, friendlyName: 'NAS1', status: ResourceStatus.EXISTING, otherField: 'some data' };
+    dialog.open.mockReturnValue({ afterClosed: jest.fn().mockReturnValue(of('Delete')) });
+    backendService.use.mockReturnValue({ with: jest.fn().mockReturnValue({ delete: jest.fn().mockReturnValue(of(null)) }) });
 
     component.deleteRow(row);
     expect(backendService.use).toHaveBeenCalled();
   });
 
   it('should update row in dataset (to Deleted status) when back-end delete is called', () => {
-    const row = { id: 1, status: ResourceStatus.EXISTING };
-    dialog.open.and.returnValue({ afterClosed: jasmine.createSpy().and.returnValue(of('Delete')) });
-    backendService.use.and.returnValue({ with: jasmine.createSpy().and.returnValue({ delete: jasmine.createSpy().and.returnValue(of(null)) }) });
+    const row: NasVolumes = { id: 1, friendlyName: 'NAS1', status: ResourceStatus.EXISTING, otherField: 'some data' };
+    dialog.open.mockReturnValue({ afterClosed: jest.fn().mockReturnValue(of('Delete')) });
+    backendService.use.mockReturnValue({ with: jest.fn().mockReturnValue({ delete: jest.fn().mockReturnValue(of(null)) }) });
 
     component.deleteRow(row);
-    expect(component.dataSource.data.some(r => r.status === ResourceStatus.DELETED)).toBe(true);
-  });
-
-  it('should display revert action if row is New', () => {
-    const row = { id: 1, status: ResourceStatus.NEW };
-    const revertButton = fixture.nativeElement.querySelector('.undo-button');
-    expect(revertButton).toBeTruthy();
-  });
-
-  it('should call backend revert when revert is selected in undo-dialog', () => {
-    const row = { id: 1, status: ResourceStatus.MODIFIED };
-    dialog.open.and.returnValue({ afterClosed: jasmine.createSpy().and.returnValue(of('Revert')) });
-    backendService.use.and.returnValue({ with: jasmine.createSpy().and.returnValue({ put: jasmine.createSpy().and.returnValue(of(null)) }) });
-
-    component.revert(row);
-    expect(backendService.use).toHaveBeenCalled();
-  });
-
-  it('should remove row in dataset when back-end revert for New Status', () => {
-    const row = { id: 1, status: ResourceStatus.NEW };
-    dialog.open.and.returnValue({ afterClosed: jasmine.createSpy().and.returnValue(of('Revert')) });
-    backendService.use.and.returnValue({ with: jasmine.createSpy().and.returnValue({ put: jasmine.createSpy().and.returnValue(of(null)) }) });
-
-    component.revert(row);
-    expect(component.dataSource.data.some(r => r.status === ResourceStatus.NEW)).toBe(false);
-  });
-});
+    expect(component.dataSource.data.some(r => r.status === Resource

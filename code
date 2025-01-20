@@ -1,0 +1,228 @@
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { NasTableComponent } from './nas-table.component';
+import { of } from 'rxjs';
+import { BackEndService } from 'src/app/_services/backend.service';
+import { MatDialog } from '@angular/material/dialog';
+import { ActivatedRoute, Router } from '@angular/router';
+import { EntitlementService } from 'src/app/_services/entitlement.service';
+import { DesignLayoutComponent } from '../../../_layouts/design-layout/design-layout.component';
+import { ResourceStatus } from 'src/app/shared/models/resource';
+
+describe('NasTableComponent', () => {
+  let component: NasTableComponent;
+  let fixture: ComponentFixture<NasTableComponent>;
+  let backendService: jasmine.SpyObj<BackEndService>;
+  let dialog: jasmine.SpyObj<MatDialog>;
+  let entitlementService: jasmine.SpyObj<EntitlementService>;
+  let router: jasmine.SpyObj<Router>;
+  let route: ActivatedRoute;
+  let designLayoutComponent: DesignLayoutComponent;
+
+  beforeEach(async () => {
+    backendService = jasmine.createSpyObj('BackEndService', ['use']);
+    dialog = jasmine.createSpyObj('MatDialog', ['open']);
+    entitlementService = jasmine.createSpyObj('EntitlementService', ['hasEntitlement']);
+    router = jasmine.createSpyObj('Router', ['navigateByUrl', 'navigate']);
+    route = {} as ActivatedRoute;
+    designLayoutComponent = {} as DesignLayoutComponent;
+
+    await TestBed.configureTestingModule({
+      imports: [NasTableComponent],
+      providers: [
+        { provide: BackEndService, useValue: backendService },
+        { provide: MatDialog, useValue: dialog },
+        { provide: EntitlementService, useValue: entitlementService },
+        { provide: Router, useValue: router },
+        { provide: ActivatedRoute, useValue: route },
+        { provide: DesignLayoutComponent, useValue: designLayoutComponent }
+      ]
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(NasTableComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  it('should create', () => {
+    expect(component).toBeTruthy();
+  });
+
+  it('should subscribe to parent layout and get data', () => {
+    const layoutData = {
+      appl: { id: 1 },
+      design: { id: 2, isEditable: true },
+      HldEntitlement: true,
+      resourceUpdateEntitlement: true
+    };
+
+    designLayoutComponent.layoutData$ = of(layoutData);
+    fixture.detectChanges();
+
+    expect(component.appId).toBe(1);
+    expect(component.designId).toBe(2);
+    expect(component.readOnly).toBe(false);
+  });
+
+  it('should display update buttons if isEditable and HldEntitlement && resourceUpdateEntitlement', () => {
+    const layoutData = {
+      appl: { id: 1 },
+      design: { id: 2, isEditable: true },
+      HldEntitlement: true,
+      resourceUpdateEntitlement: true
+    };
+
+    designLayoutComponent.layoutData$ = of(layoutData);
+    fixture.detectChanges();
+
+    expect(component.buttons).toEqual(component.updateButtons);
+  });
+
+  it('should display readonly buttons if NOT isEditable', () => {
+    const layoutData = {
+      appl: { id: 1 },
+      design: { id: 2, isEditable: false },
+      HldEntitlement: true,
+      resourceUpdateEntitlement: true
+    };
+
+    designLayoutComponent.layoutData$ = of(layoutData);
+    fixture.detectChanges();
+
+    expect(component.buttons).toEqual(component.readOnlyButtons);
+  });
+
+  it('should display readonly buttons if NOT HldEntitlement', () => {
+    const layoutData = {
+      appl: { id: 1 },
+      design: { id: 2, isEditable: true },
+      HldEntitlement: false,
+      resourceUpdateEntitlement: true
+    };
+
+    designLayoutComponent.layoutData$ = of(layoutData);
+    fixture.detectChanges();
+
+    expect(component.buttons).toEqual(component.readOnlyButtons);
+  });
+
+  it('should display readonly buttons if NOT resourceUpdateEntitlement', () => {
+    const layoutData = {
+      appl: { id: 1 },
+      design: { id: 2, isEditable: true },
+      HldEntitlement: true,
+      resourceUpdateEntitlement: false
+    };
+
+    designLayoutComponent.layoutData$ = of(layoutData);
+    fixture.detectChanges();
+
+    expect(component.buttons).toEqual(component.readOnlyButtons);
+  });
+
+  it('should retrieve and display NAS data from backend', () => {
+    const mockData = [{ id: 1, friendlyName: 'NAS1', status: 'NEW' }];
+    backendService.use.and.returnValue({ with: jasmine.createSpy().and.returnValue({ get: jasmine.createSpy().and.returnValue(of(mockData)) }) });
+
+    component.retrieve().subscribe(data => {
+      expect(data).toEqual(mockData);
+    });
+  });
+
+  it('should display undo action if row is New', () => {
+    const row = { id: 1, status: ResourceStatus.NEW };
+    fixture.detectChanges();
+
+    const undoButton = fixture.nativeElement.querySelector('.undo-button');
+    expect(undoButton).toBeTruthy();
+  });
+
+  it('should display undo action if row is Modified', () => {
+    const row = { id: 1, status: ResourceStatus.MODIFIED };
+    fixture.detectChanges();
+
+    const undoButton = fixture.nativeElement.querySelector('.undo-button');
+    expect(undoButton).toBeTruthy();
+  });
+
+  it('should display delete action if row is existing', () => {
+    const row = { id: 1, status: ResourceStatus.EXISTING };
+    fixture.detectChanges();
+
+    const deleteButton = fixture.nativeElement.querySelector('.delete-button');
+    expect(deleteButton).toBeTruthy();
+  });
+
+  it('should display are-you-sure-dialog when delete button is pressed', () => {
+    const row = { id: 1, status: ResourceStatus.EXISTING };
+    dialog.open.and.returnValue({ afterClosed: jasmine.createSpy().and.returnValue(of('Delete')) });
+
+    component.deleteRow(row);
+    expect(dialog.open).toHaveBeenCalled();
+  });
+
+  it('should display are-you-sure-dialog when undo row-action is pressed for a Modified status', () => {
+    const row = { id: 1, status: ResourceStatus.MODIFIED };
+    dialog.open.and.returnValue({ afterClosed: jasmine.createSpy().and.returnValue(of('Revert')) });
+
+    component.revert(row);
+    expect(dialog.open).toHaveBeenCalled();
+  });
+
+  it('should display are-you-sure-dialog-this-can-not-be-reverted when undo row-action is pressed for a New status', () => {
+    const row = { id: 1, status: ResourceStatus.NEW };
+    dialog.open.and.returnValue({ afterClosed: jasmine.createSpy().and.returnValue(of('Revert')) });
+
+    component.revert(row);
+    expect(dialog.open).toHaveBeenCalled();
+  });
+
+  it('should do nothing when cancel is selected in delete-dialog', () => {
+    const row = { id: 1, status: ResourceStatus.EXISTING };
+    dialog.open.and.returnValue({ afterClosed: jasmine.createSpy().and.returnValue(of('Cancel')) });
+
+    component.deleteRow(row);
+    expect(backendService.use).not.toHaveBeenCalled();
+  });
+
+  it('should call back-end delete when delete is selected in delete dialog', () => {
+    const row = { id: 1, status: ResourceStatus.EXISTING };
+    dialog.open.and.returnValue({ afterClosed: jasmine.createSpy().and.returnValue(of('Delete')) });
+    backendService.use.and.returnValue({ with: jasmine.createSpy().and.returnValue({ delete: jasmine.createSpy().and.returnValue(of(null)) }) });
+
+    component.deleteRow(row);
+    expect(backendService.use).toHaveBeenCalled();
+  });
+
+  it('should update row in dataset (to Deleted status) when back-end delete is called', () => {
+    const row = { id: 1, status: ResourceStatus.EXISTING };
+    dialog.open.and.returnValue({ afterClosed: jasmine.createSpy().and.returnValue(of('Delete')) });
+    backendService.use.and.returnValue({ with: jasmine.createSpy().and.returnValue({ delete: jasmine.createSpy().and.returnValue(of(null)) }) });
+
+    component.deleteRow(row);
+    expect(component.dataSource.data.some(r => r.status === ResourceStatus.DELETED)).toBe(true);
+  });
+
+  it('should display revert action if row is New', () => {
+    const row = { id: 1, status: ResourceStatus.NEW };
+    const revertButton = fixture.nativeElement.querySelector('.undo-button');
+    expect(revertButton).toBeTruthy();
+  });
+
+  it('should call backend revert when revert is selected in undo-dialog', () => {
+    const row = { id: 1, status: ResourceStatus.MODIFIED };
+    dialog.open.and.returnValue({ afterClosed: jasmine.createSpy().and.returnValue(of('Revert')) });
+    backendService.use.and.returnValue({ with: jasmine.createSpy().and.returnValue({ put: jasmine.createSpy().and.returnValue(of(null)) }) });
+
+    component.revert(row);
+    expect(backendService.use).toHaveBeenCalled();
+  });
+
+  it('should remove row in dataset when back-end revert for New Status', () => {
+    const row = { id: 1, status: ResourceStatus.NEW };
+    dialog.open.and.returnValue({ afterClosed: jasmine.createSpy().and.returnValue(of('Revert')) });
+    backendService.use.and.returnValue({ with: jasmine.createSpy().and.returnValue({ put: jasmine.createSpy().and.returnValue(of(null)) }) });
+
+    component.revert(row);
+    expect(component.dataSource.data.some(r => r.status === ResourceStatus.NEW)).toBe(false);
+  });
+});
